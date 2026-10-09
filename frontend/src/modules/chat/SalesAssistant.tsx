@@ -7,7 +7,6 @@ import {
   ThreadPrimitive,
   MessagePrimitive,
   ActionBarPrimitive,
-  ComposerPrimitive,
   AuiIf,
   useAuiState,
   type ThreadMessageLike,
@@ -22,8 +21,6 @@ import {
   Minimize2,
   Plus,
   ArrowLeftRight,
-  ArrowUp,
-  Square,
 } from "lucide-react";
 import { filterCustomers, useSalesStore } from "@/modules/sales/store";
 import { streamChat, getChatStatus, getChatHistory } from "@/modules/sales/api";
@@ -337,54 +334,6 @@ function AssistantMessage() {
     </MessagePrimitive.Root>
   );
 }
-function AssistantComposer() {
-  const language = useSalesStore((s) => s.assistantLanguage);
-  const busy = useSalesStore((s) => s.voiceBusy);
-  const running = useAuiState((s) => s.thread.isRunning);
-  const german = language === "de";
-  return (
-    <div className="composer-wrap">
-      <ComposerPrimitive.Root className="composer">
-        <ComposerPrimitive.Input
-          aria-label={
-            german ? "Nachricht oder Transkript" : "Message or transcript"
-          }
-          placeholder={german ? "Nachricht eingeben…" : "Type a message…"}
-          lang={language}
-          maxLength={2000}
-          disabled={busy}
-          minRows={2}
-          maxRows={5}
-          autoFocus={false}
-          cancelOnEscape={false}
-        />
-        <div className="composer-bottom">
-          <span role="status">
-            {german
-              ? "Enter zum Senden · Shift+Enter für neue Zeile"
-              : "Enter to send · Shift+Enter for a new line"}
-          </span>
-          {running ? (
-            <ComposerPrimitive.Cancel
-              className="send-button"
-              aria-label={german ? "Antwort stoppen" : "Stop reply"}
-            >
-              <Square size={15} />
-            </ComposerPrimitive.Cancel>
-          ) : (
-            <ComposerPrimitive.Send
-              className="send-button"
-              disabled={busy}
-              aria-label={german ? "Nachricht senden" : "Send message"}
-            >
-              <ArrowUp size={17} />
-            </ComposerPrimitive.Send>
-          )}
-        </div>
-      </ComposerPrimitive.Root>
-    </div>
-  );
-}
 export function SalesAssistant() {
   const open = useSalesStore((s) => s.assistantOpen),
     expanded = useSalesStore((s) => s.assistantExpanded),
@@ -467,7 +416,6 @@ export function SalesAssistant() {
           <ArrowDown size={13} />
           Latest
         </ThreadPrimitive.ScrollToBottom>
-        <AssistantComposer />
       </ThreadPrimitive.Root>
     </aside>
   );

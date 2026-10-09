@@ -287,7 +287,6 @@ export function VoicePanel() {
   return (
     <div className="voice-panel">
       <label className="voice-language">
-        <span>{german ? "Sprache" : "Language"}</span>
         <select
           aria-label="Assistant language"
           value={language}
@@ -333,7 +332,7 @@ export function VoicePanel() {
         <ParticlesOrb
           state={!configured || !chatReady ? "disabled" : displayed}
           levelRef={state === "listening" ? adapter?.levelRef : undefined}
-          size={120}
+          size={84}
           colorFrom="#b96532"
           colorTo="#f5b079"
           label={displayed}
