@@ -1,6 +1,48 @@
-# PeCal Pulse — Perschmann Hack
+# PeCal Pulse
 
-A sales intelligence workspace for **Perschmann Challenge 2: Customer Activity Monitoring**. It helps Inside Sales choose an account, understand why to contact it, prepare a conversation, and record a next step.
+### From calibration history to better sales conversations
+
+A sales intelligence workspace for **Perschmann Challenge 2: Customer Activity Monitoring**. Prioritize accounts, understand the evidence, prepare a conversation, and save the next step—all in one workspace.
+
+**Next.js · FastAPI · LangGraph · ECharts · LiveKit**
+
+[Quick start](#local-setup) · [Product tour](#product-tour) · [Configuration](#configuration) · [Data and privacy](#data-and-privacy)
+
+![PeCal Pulse landing page](docs/screenshots/landing-desktop.jpg)
+
+## Product tour
+
+### Opportunity dashboard
+
+Find where to focus using a shared opportunity map, scoped metrics, and a ranked shortlist. Sector, equipment, segment, and due-window filters keep the evidence aligned.
+
+![Opportunity dashboard](docs/screenshots/dashboard-desktop.jpg)
+
+### Customer intelligence
+
+Review calibration history, forecast totals, equipment evidence, and conversation prompts. Record ownership and follow-ups separately from source history.
+
+![Customer workspace](docs/screenshots/customers-desktop.jpg)
+
+### Insights
+
+Explore sector history, return behavior, and model coverage with explanations of what each estimate means.
+
+<details>
+<summary>View the Insights screenshot</summary>
+
+![Insights workspace](docs/screenshots/insights-desktop.jpg)
+
+</details>
+
+*Desktop captures show the local prototype, including a synthetic customer example. Fresh narrow-screen captures are available below. Screenshots are illustrations, not live operational data. A fresh clone starts with the included synthetic fixture; private exports are not distributed.*
+
+<details>
+<summary>Fresh narrow-screen screenshots</summary>
+
+[Landing](docs/screenshots/landing.jpg) · [Dashboard](docs/screenshots/dashboard.jpg) · [Customers](docs/screenshots/customers.jpg) · [Insights](docs/screenshots/insights.jpg)
+
+</details>
 
 ## Implemented features
 
@@ -74,7 +116,7 @@ The backend still runs separately.
 
 `DAYTONA_API_KEY` in the template is reserved; arbitrary sandbox execution is not implemented.
 
-### Voice and text
+### Voice assistant
 
 Open **Ask Pulse** and select **EN · English** or **DE · Deutsch**. Hold Space to speak, then release to send automatically. Alternatively, tap the orb to start and tap again to send. The recognized transcript appears in chat. Pulse acknowledges the request, runs the same agent/tools as typed chat, and speaks the opening summary of the completed answer (up to 600 characters). Details, tool traces, and charts remain in chat.
 
@@ -103,48 +145,9 @@ The currently prepared local workspace uses the authorized SQLite export from `P
 
 September in the export is partial and excluded from complete-month history. This is an **offline export**, not evidence of a working live SQL connection. These private local files are not included in Git.
 
-### Import an authorized source
+### Refresh source data
 
-Keep source files under ignored `data/runtime/source/`. For SQLite, verify SHA256 against the source manifest, then run:
-
-```powershell
-uv run python -m analysis.export_sqlite_data data/runtime/source/PeCalHackathon2026/perschmann.sqlite --history-start 2024-01 --complete-through 2026-08
-```
-
-The importer opens SQLite read-only and writes normalized inputs to ignored `analysis/customers/`. It refuses to overwrite existing extracts. Preserve prior inputs separately before preparing another source.
-
-For SQL Server, configure `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`, `DB_PASSWORD`, and optionally `DB_DRIVER` / `DB_TRUST_SERVER_CERTIFICATE` in root `.env`. With authorized network access, run:
-
-```powershell
-uv run python -m analysis.export_customer_data
-uv run python -m analysis.export_instrument_data
-```
-
-Settings come from `.env`; a password is prompted only if absent. SQL history queries currently use January 2024–August 2026. Update and validate their boundaries for a different period. The lab default is `DB_TRUST_SERVER_CERTIFICATE=yes`; configure this for the actual server policy.
-
-### Publish snapshots and analytics
-
-Choose a **new** snapshot ID, the source's actual UTC extraction timestamp, and a verified complete-month cutoff. Replace the ID and timestamp placeholders below. These commands illustrate the August 2026 cutoff:
-
-```powershell
-uv run python -m backend.app.capabilities.data.build_snapshot --snapshot-id YOUR_NEW_ID --extracted-at YOUR_ACTUAL_UTC_TIMESTAMP --reference-date 2026-08-31 --history-start 2024-01 --complete-through 2026-08
-uv run python -m analysis.build_runtime_snapshot --snapshot-id YOUR_NEW_ID
-uv run python -m analysis.challenge2_ml.run --snapshot-id YOUR_NEW_ID --output data/runtime/analytics-v3
-uv run python -m analysis.build_retention --snapshot-id YOUR_NEW_ID --analytics-root data/runtime/analytics-v3
-uv run python -m analysis.evaluate_volume --snapshot-id YOUR_NEW_ID --analytics-root data/runtime/analytics-v3
-uv run python -m analysis.build_insights --snapshot-id YOUR_NEW_ID --analytics-root data/runtime/analytics-v3
-```
-
-Set `PECAL_ANALYTICS_ROOT=data/runtime/analytics-v3` in `.env` for the API. Also export it in the shell before publishing opportunities; this offline command reads the process environment:
-
-```powershell
-$env:PECAL_ANALYTICS_ROOT = "data/runtime/analytics-v3"
-uv run python -m analysis.build_opportunities --snapshot-id YOUR_NEW_ID
-```
-
-After successful publication, set `PECAL_SNAPSHOT=YOUR_NEW_ID` in `.env` and restart the API. The opportunity builder publishes all 12 combinations of 30/60/90 days, inferred-date inclusion, and past-due inclusion. Training runs offline, never inside API requests.
-
-Keep compact runtime JSON and its matching `.requirements.sqlite3` evidence index together under `data/runtime/snapshots/`. Raw snapshots above 100 MB are rejected by the API. Missing model outputs or optional sidecars are shown as unavailable.
+See [Data refresh guide](docs/data-refresh.md) for read-only extraction, immutable snapshot publication, analytics generation, and verification. Keep exports and generated artifacts in ignored local directories.
 
 ## Analytics meanings and limits
 
