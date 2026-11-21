@@ -32,10 +32,22 @@ _mode: str | None = None  # "developer" (AI Studio) or "vertex" (Vertex AI expre
 probe_result: dict = {"checked": False}
 _effective_model: str | None = None
 FALLBACK_MODELS = ["gemini-3.5-flash", "gemini-flash-latest", "gemini-3.8-flash"]
+RETIRED_MODELS = {"gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"}  # closed to new Gemini API users
+_last_probe: float = 0.0
+
+
+def preferred_model() -> str:
+    configured = get_settings().gemini_model
+    return FALLBACK_MODELS[0] if configured in RETIRED_MODELS else configured
 
 
 def current_model() -> str:
-    return _effective_model or get_settings().gemini_model
+    return _effective_model or preferred_model()
+
+
+def needs_reprobe(every: float = 120.0) -> bool:
+    import time
+    return get_settings().gemini_configured and not probe_result.get("ok") and time.time() - _last_probe > every
 
 
 def _make_client(key: str, mode: str):
@@ -60,7 +72,7 @@ def current_mode() -> str:
     return _mode or "developer"
 
 
-async def probe(timeout: float = 15.0) -> dict:
+async def probe(timeout: float = 40.0) -> dict:
     """One tiny request at startup to verify the key and pick the endpoint.
 
     AI Studio keys use the Gemini Developer API; keys created for Vertex AI
@@ -72,13 +84,16 @@ async def probe(timeout: float = 15.0) -> dict:
     if not key:
         probe_result = {"checked": True, "ok": False, "reason": "GEMINI_API_KEY is not set"}
         return probe_result
-    global _effective_model
+    global _effective_model, _last_probe
+    import time
+    _last_probe = time.time()
     errors_seen = []
     modes = ["developer", "vertex"]  # AI Studio keys (including "AQ." keys) use the Gemini API
-    models = list(dict.fromkeys([settings.gemini_model, *FALLBACK_MODELS]))
+    models = list(dict.fromkeys([preferred_model(), *FALLBACK_MODELS]))
     for mode in modes:
         client = _make_client(key, mode)
         for model in models:
+          for attempt in (1, 2):  # one retry for transient 503 "high demand"
             try:
                 r = await asyncio.wait_for(client.aio.models.generate_content(
                     model=model, contents="Reply with the single word OK."), timeout=timeout)
@@ -86,13 +101,19 @@ async def probe(timeout: float = 15.0) -> dict:
                     _client, _client_key, _mode, _effective_model = client, key, mode, model
                     probe_result = {"checked": True, "ok": True, "mode": mode, "model": model}
                     return probe_result
+                break
             except asyncio.TimeoutError:
                 errors_seen.append(f"{mode}/{model}: timeout")
+                break
             except Exception as exc:  # noqa: BLE001 - category only, never the body
                 code = getattr(exc, "code", None)
                 errors_seen.append(f"{mode}/{model}: {type(exc).__name__}{f' HTTP {code}' if code else ''}")
-                if code in (401, 403):
-                    break  # key not valid for this endpoint: skip its other models
+                if code in (500, 502, 503, 504) and attempt == 1:
+                    await asyncio.sleep(3)
+                    continue
+                break
+          if errors_seen and errors_seen[-1].startswith(f"{mode}/") and (" HTTP 401" in errors_seen[-1] or " HTTP 403" in errors_seen[-1]):
+              break  # key not valid for this endpoint: skip its other models
     probe_result = {"checked": True, "ok": False, "reason": "Gemini rejected the key or is unreachable (" + "; ".join(errors_seen) + ")"}
     return probe_result
 

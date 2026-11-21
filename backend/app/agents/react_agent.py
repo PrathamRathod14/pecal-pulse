@@ -220,7 +220,7 @@ async def agent_lifespan(settings=None, model=None):
         model_name = pulse_gemini.current_model()
         from ..pulse import gemini as pulse_gemini
         model = ChatGoogleGenerativeAI(model=model_name, google_api_key=gemini_key, temperature=0,
-                                       timeout=45, max_retries=1,
+                                       timeout=90, max_retries=3,
                                        vertexai=pulse_gemini.current_mode() == "vertex")
     model = model if model is not None else ChatOpenRouter(
         api_key=settings.openrouter_api_key.get_secret_value() or "missing",

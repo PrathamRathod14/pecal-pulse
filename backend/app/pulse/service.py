@@ -212,6 +212,9 @@ class Runtime:
 
     async def sweep(self) -> None:
         """Expire stale approvals and resume runs that no longer wait on anyone."""
+        from . import gemini
+        if gemini.needs_reprobe():
+            asyncio.create_task(gemini.probe())  # never blocks the approval sweep
         touched = guard.expire_due()
         with connect() as conn:
             waiting = [r["id"] for r in conn.execute("SELECT id FROM agent_runs WHERE status='awaiting_approval'")]
