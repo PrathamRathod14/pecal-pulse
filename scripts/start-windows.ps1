@@ -43,6 +43,13 @@ Pop-Location
 Step "Generating the synthetic demo dataset"
 uv run python -m backend.app.pulse.demo_data --with-analytics
 
+Step "Starting backend (http://127.0.0.1:8001)"
+Start-Process powershell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command",
+  "`$Host.UI.RawUI.WindowTitle='SignalPilot backend'; Set-Location '$root'; uv run uvicorn backend.app.main:app --host 127.0.0.1 --port 8001 --reload --reload-dir backend"
+Step "Starting frontend (http://127.0.0.1:3000)"
+Start-Process powershell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command",
+  "`$Host.UI.RawUI.WindowTitle='SignalPilot frontend'; Set-Location '$root\frontend'; npx --yes pnpm@11.21.0 dev"
+
 Step "Preparing n8n workflows"
 # Fill the secret + backend URL into the workflow templates (output is git-ignored).
 $render = Join-Path $root "data\runtime\n8n-render"
@@ -51,41 +58,35 @@ $backendForN8n = "http://127.0.0.1:8001"
 $nodeMajor = [int]((node --version).TrimStart('v').Split('.')[0])
 $dockerOk = $false
 if (Have "docker") { docker info *> $null; $dockerOk = ($LASTEXITCODE -eq 0) }
-if ($dockerOk) { $backendForN8n = "http://host.docker.internal:8001" }
+$n8nRunning = $false
+try { Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5678/healthz -TimeoutSec 3 | Out-Null; $n8nRunning = $true } catch {}
+$useDocker = $dockerOk -and -not $n8nRunning
+if ($useDocker) { $backendForN8n = "http://host.docker.internal:8001" }
 Get-ChildItem (Join-Path $root "n8n\workflows\*.json") | ForEach-Object {
   $text = [IO.File]::ReadAllText($_.FullName).Replace("__PULSE_WEBHOOK_SECRET__", $env:PULSE_WEBHOOK_SECRET).Replace("__PULSE_BACKEND_URL__", $backendForN8n)
   [IO.File]::WriteAllText((Join-Path $render $_.Name), $text, (New-Object System.Text.UTF8Encoding($false)))
 }
 $n8nLog = Join-Path $root "data\runtime\n8n-setup.log"
-$n8nRunning = $false
-try { Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5678/healthz -TimeoutSec 3 | Out-Null; $n8nRunning = $true } catch {}
-
-if ($dockerOk -and -not $n8nRunning) {
+if ($useDocker) {
   $env:PULSE_BACKEND_URL_COMPOSE = $backendForN8n
   docker compose up -d n8n
   Write-Host "n8n running in Docker (workflows imported by n8n-init)."
 } else {
-  $nodePkg = if ($nodeMajor -ge 24) { "" } else { "-p node@24 " }
-  $n8n = "npx --yes $nodePkg-p n8n@2.48.7 n8n"
-  Write-Host "Importing SignalPilot workflows into n8n (first run downloads n8n; log: data\runtime\n8n-setup.log)..."
-  $import = "$n8n import:workflow --separate --input='$render'; foreach (`$id in 'PulseErrorHdl001','PulseExecute0001','PulseRiskScan001') { $n8n publish:workflow --id=`$id }"
-  powershell -NoProfile -ExecutionPolicy Bypass -Command $import *> $n8nLog
-  if ($LASTEXITCODE -ne 0) { Write-Host "n8n workflow import reported a problem - see data\runtime\n8n-setup.log" -ForegroundColor Yellow }
+  # Reuse an installed n8n (global command or the npx cache) instead of downloading another copy.
+  $n8n = if (Have "n8n") { "n8n" } elseif ($nodeMajor -ge 24) { "npx --yes n8n" } else { "npx --yes -p node@24 -p n8n n8n" }
   if ($n8nRunning) {
-    Write-Host "n8n is already running on port 5678 - workflows were updated in place."
+    $startCmd = "Write-Host 'n8n is already running on port 5678 - workflows updated in place. You can close this window.'"
   } else {
-    Start-Process powershell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command",
-      "`$Host.UI.RawUI.WindowTitle='SignalPilot n8n'; `$env:N8N_PORT='5678'; `$env:N8N_DIAGNOSTICS_ENABLED='false'; `$env:N8N_SECURE_COOKIE='false'; $n8n start"
-    Write-Host "n8n starting in its own window (http://127.0.0.1:5678)."
+    $startCmd = "`$env:N8N_PORT='5678'; `$env:N8N_DIAGNOSTICS_ENABLED='false'; `$env:N8N_SECURE_COOKIE='false'; $n8n start"
   }
+  $cmd = "`$Host.UI.RawUI.WindowTitle='SignalPilot n8n'; Start-Transcript -Path '$n8nLog' -Force | Out-Null; " +
+         "Write-Host 'Importing SignalPilot workflows into n8n...'; " +
+         "$n8n import:workflow --separate --input='$render'; " +
+         "foreach (`$id in 'PulseErrorHdl001','PulseExecute0001','PulseRiskScan001') { $n8n publish:workflow --id=`$id }; " +
+         $startCmd
+  Start-Process powershell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $cmd
+  Write-Host "n8n setup continues in the 'SignalPilot n8n' window (log: data\runtime\n8n-setup.log)."
 }
-
-Step "Starting backend (http://127.0.0.1:8001)"
-Start-Process powershell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command",
-  "`$Host.UI.RawUI.WindowTitle='SignalPilot backend'; Set-Location '$root'; uv run uvicorn backend.app.main:app --host 127.0.0.1 --port 8001 --reload --reload-dir backend"
-Step "Starting frontend (http://127.0.0.1:3000)"
-Start-Process powershell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command",
-  "`$Host.UI.RawUI.WindowTitle='SignalPilot frontend'; Set-Location '$root\frontend'; npx --yes pnpm@11.21.0 dev"
 
 Step "Waiting for the app"
 for ($i = 0; $i -lt 90; $i++) {
