@@ -21,7 +21,7 @@ conn=connect_source()
 for name,sql in queries.items():
  c=conn.execute(sql); cols=[v[0] for v in c.description]; count=0
  temp=ROOT/f'{name}.json.tmp'
- with temp.open('w') as output:
+ with temp.open('w', encoding='utf-8') as output:
   output.write('[')
   while batch:=c.fetchmany(10000):
    for row in batch:

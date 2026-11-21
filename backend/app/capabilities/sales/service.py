@@ -5,7 +5,7 @@ from .models import ChartArtifact, Dataset, Filters, FollowupCreate
 from ...realtime.publisher import publish
 
 ROOT = Path(__file__).resolve().parents[4]
-FIXTURE = json.loads((ROOT / "data/mock/workspace.json").read_text())
+FIXTURE = json.loads((ROOT / "data/mock/workspace.json").read_text(encoding="utf-8"))
 
 
 def customer(customer_id: str):

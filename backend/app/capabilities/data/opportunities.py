@@ -56,7 +56,7 @@ def _base(snapshot_id, filters, allow_fit=False):
     root = Path(os.getenv('PECAL_OPPORTUNITY_ROOT', str(service.ROOT / 'data/runtime/opportunities')))
     path = root / snapshot_id / f'{signature}.json'
     try:
-        model = json.loads(path.read_text())
+        model = json.loads(path.read_text(encoding="utf-8"))
         if model['rule_version'] != features.RULE_VERSION:
             raise ValueError('model version mismatch')
     except (OSError, ValueError, KeyError):
@@ -65,7 +65,7 @@ def _base(snapshot_id, filters, allow_fit=False):
         model = features.fit_map([r['raw'] for r in rows])
         path.parent.mkdir(parents=True, exist_ok=True)
         temp = path.with_suffix('.tmp')
-        temp.write_text(json.dumps(model, allow_nan=False, indent=2))
+        temp.write_text(json.dumps(model, allow_nan=False, indent=2), encoding="utf-8")
         temp.replace(path)
     cache[key] = rows, model, signature
     return cache[key]

@@ -59,7 +59,7 @@ def build(snapshot_id, folder=None):
     compact['requirement_summary']={'by_kind':dict(kinds),'eligible':eligible,'by_customer':dict(by_customer)}
     output=folder/f'{snapshot_id}.compact.json'
     temp=output.with_suffix('.tmp')
-    with temp.open('w') as f: json.dump(compact,f,separators=(',',':'),allow_nan=False)
+    with temp.open('w', encoding='utf-8') as f: json.dump(compact,f,separators=(',',':'),allow_nan=False)
     temp.replace(output)
     print(json.dumps({'compact_mb':round(output.stat().st_size/1024**2,1),'accounts':len(compact['profiles']),
         'history_rows':len(compact['history']),'runtime_requirements':len(near),'full_evidence_rows':sum(kinds.values())}),flush=True)

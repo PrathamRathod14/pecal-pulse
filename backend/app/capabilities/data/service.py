@@ -38,7 +38,7 @@ _SECTION_MODELS = {
 def _manifest_only(path: Path) -> dict:
     # Our snapshot writer places the small manifest first; don't parse hundreds
     # of MB merely to enumerate or select a snapshot on every request.
-    with path.open() as source:
+    with path.open(encoding="utf-8") as source:
         prefix = source.read(65536)
     match = re.search(r'"manifest"\s*:', prefix)
     if match is None:
@@ -90,7 +90,7 @@ def runtime_source_path(snapshot_id: str) -> Path:
 def _load_snapshot(snapshot_id: str) -> dict:
     """Load and contract-validate one immutable snapshot document."""
     source = runtime_source_path(snapshot_id)
-    raw = json.loads(source.read_text())
+    raw = json.loads(source.read_text(encoding="utf-8"))
     manifest = v2.SnapshotManifest.model_validate(raw["manifest"])
     if manifest.snapshot_id != snapshot_id:
         raise ValueError("snapshot_id mismatch inside snapshot document")

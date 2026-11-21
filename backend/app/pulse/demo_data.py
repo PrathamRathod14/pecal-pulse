@@ -242,5 +242,5 @@ if __name__ == "__main__":
     import sys
 
     path = write(force="--force" in sys.argv)
-    doc = json.loads(path.read_text())
+    doc = json.loads(path.read_text(encoding="utf-8"))
     print(json.dumps({"snapshot": str(path.relative_to(ROOT)), "row_counts": doc["manifest"]["row_counts"]}))

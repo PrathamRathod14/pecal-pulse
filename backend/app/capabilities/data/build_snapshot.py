@@ -321,7 +321,7 @@ def main() -> None:
                 raise SystemExit(f"missing extract: {path}")
             print(f"optional extract missing, continuing without: {name}")
             return []
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
 
     document = build_snapshot(
         load("monthly_history"),
@@ -337,7 +337,7 @@ def main() -> None:
     )
     SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
     out = SNAPSHOT_DIR / f"{args.snapshot_id}.json"
-    with out.open("x") as output:
+    with out.open("x", encoding="utf-8") as output:
         output.write(json.dumps(document, ensure_ascii=False))
     print(f"wrote {out}")
     print(json.dumps(document["manifest"], indent=1))
