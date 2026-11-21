@@ -1,0 +1,165 @@
+{
+  "id": "PulseRiskScan001",
+  "name": "PeCal Pulse – Risk-triggered investigations",
+  "active": true,
+  "nodes": [
+    {
+      "id": "schedule",
+      "name": "Every 6 hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        100
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "scan-webhook",
+      "name": "Scan now webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        320
+      ],
+      "webhookId": "7a2f9c10-pulse-scan",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pulse-scan",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "verify-scan-trigger",
+      "name": "Verify scan trigger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        320
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const canon = (v) => Array.isArray(v) ? '[' + v.map(canon).join(',') + ']'\n  : (v !== null && typeof v === 'object') ? '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}'\n  : JSON.stringify(v);\nconst crypto = require('crypto');\nconst secret = $env.PULSE_WEBHOOK_SECRET || '';\nconst sign = (body) => { const ts = String(Math.floor(Date.now() / 1000)); return { ts, sig: crypto.createHmac('sha256', secret).update(ts + '.' + body).digest('hex') }; };\n\nconst item = $input.first().json;\nconst h = item.headers || {};\nconst ts = String(h['x-pulse-timestamp'] || ''), sig = String(h['x-pulse-signature'] || '');\nlet valid = false;\nif (secret && /^[0-9]+$/.test(ts) && /^[0-9a-f]{64}$/.test(sig) && Math.abs(Date.now()/1000 - Number(ts)) <= 300) {\n  const expected = crypto.createHmac('sha256', secret).update(ts + '.' + canon(item.body || {})).digest('hex');\n  valid = crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(sig, 'hex'));\n}\nif (!valid) throw new Error('Rejected unsigned scan trigger');\nreturn [{ json: { ok: true } }];"
+      }
+    },
+    {
+      "id": "sign-scan-request",
+      "name": "Sign scan request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        200
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const canon = (v) => Array.isArray(v) ? '[' + v.map(canon).join(',') + ']'\n  : (v !== null && typeof v === 'object') ? '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}'\n  : JSON.stringify(v);\nconst crypto = require('crypto');\nconst secret = $env.PULSE_WEBHOOK_SECRET || '';\nconst sign = (body) => { const ts = String(Math.floor(Date.now() / 1000)); return { ts, sig: crypto.createHmac('sha256', secret).update(ts + '.' + body).digest('hex') }; };\n\nconst body = JSON.stringify({ max_runs: 1, requested_by: 'n8n', n8n_execution_id: String($execution.id) });\nconst { ts, sig } = sign(body);\nreturn [{ json: { body, ts, sig } }];"
+      }
+    },
+    {
+      "id": "ask-pulse-to-investigate",
+      "name": "Ask Pulse to investigate",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.PULSE_BACKEND_URL + '/api/pulse/n8n/scan' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Pulse-Timestamp",
+              "value": "={{ $json.ts }}"
+            },
+            {
+              "name": "X-Pulse-Signature",
+              "value": "={{ $json.sig }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Every 6 hours": {
+      "main": [
+        [
+          {
+            "node": "Sign scan request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Scan now webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify scan trigger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify scan trigger": {
+      "main": [
+        [
+          {
+            "node": "Sign scan request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign scan request": {
+      "main": [
+        [
+          {
+            "node": "Ask Pulse to investigate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "PulseErrorHdl001"
+  },
+  "pinData": {},
+  "tags": []
+}

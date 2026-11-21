@@ -19,4 +19,5 @@ dependencies = [
     "ijson>=3.4,<4",
     "livekit-agents~=1.8",
     "livekit-api>=1.2.1",
+    "google-genai>=1.30,<2",
 ]

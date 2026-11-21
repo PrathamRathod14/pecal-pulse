@@ -1,0 +1,102 @@
+{
+  "id": "PulseErrorHdl001",
+  "name": "PeCal Pulse – Error handler",
+  "active": false,
+  "nodes": [
+    {
+      "id": "error-trigger",
+      "name": "On workflow error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        200
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "sign-failure-report",
+      "name": "Sign failure report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        200
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const canon = (v) => Array.isArray(v) ? '[' + v.map(canon).join(',') + ']'\n  : (v !== null && typeof v === 'object') ? '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}'\n  : JSON.stringify(v);\nconst crypto = require('crypto');\nconst secret = $env.PULSE_WEBHOOK_SECRET || '';\nconst sign = (body) => { const ts = String(Math.floor(Date.now() / 1000)); return { ts, sig: crypto.createHmac('sha256', secret).update(ts + '.' + body).digest('hex') }; };\n\nconst e = $input.first().json;\nconst body = JSON.stringify({\n  failed_n8n_execution_id: String((e.execution && e.execution.id) || ''),\n  workflow: (e.workflow && e.workflow.name) || null,\n  node: (e.execution && e.execution.lastNodeExecuted) || null,\n  message: String((e.execution && e.execution.error && e.execution.error.message) || 'unknown error').slice(0, 400),\n});\nconst { ts, sig } = sign(body);\nreturn [{ json: { body, ts, sig } }];"
+      }
+    },
+    {
+      "id": "report-failure-to-pulse",
+      "name": "Report failure to Pulse",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        200
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.PULSE_BACKEND_URL + '/api/pulse/n8n/error' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Pulse-Timestamp",
+              "value": "={{ $json.ts }}"
+            },
+            {
+              "name": "X-Pulse-Signature",
+              "value": "={{ $json.sig }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "On workflow error": {
+      "main": [
+        [
+          {
+            "node": "Sign failure report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sign failure report": {
+      "main": [
+        [
+          {
+            "node": "Report failure to Pulse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {},
+  "tags": []
+}

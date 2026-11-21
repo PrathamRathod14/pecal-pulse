@@ -9,11 +9,14 @@ from .api.chat import router as chat_router
 from .api.voice import router as voice_router
 from .agents.react_agent import agent_lifespan
 from .agents.voice_livekit import VoiceManager
+from .pulse.api import router as pulse_router
+from .pulse.service import pulse_lifespan
 
 @asynccontextmanager
 async def lifespan(app):
-    async with agent_lifespan() as chat:
+    async with agent_lifespan() as chat, pulse_lifespan() as pulse:
         app.state.chat = chat
+        app.state.pulse = pulse
         app.state.voice = VoiceManager()
         try:
             yield
@@ -25,3 +28,4 @@ app.include_router(sales_router)
 app.include_router(v2_router)
 app.include_router(chat_router)
 app.include_router(voice_router)
+app.include_router(pulse_router)

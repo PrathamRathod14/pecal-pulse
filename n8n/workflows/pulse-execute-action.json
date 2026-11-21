@@ -1,0 +1,418 @@
+{
+  "id": "PulseExecute0001",
+  "name": "PeCal Pulse – Execute approved action",
+  "active": true,
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Pulse execute webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "5d1c8a52-pulse-execute",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pulse-execute",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "verify-signature",
+      "name": "Verify signature",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const canon = (v) => Array.isArray(v) ? '[' + v.map(canon).join(',') + ']'\n  : (v !== null && typeof v === 'object') ? '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}'\n  : JSON.stringify(v);\nconst crypto = require('crypto');\nconst secret = $env.PULSE_WEBHOOK_SECRET || '';\nconst sign = (body) => { const ts = String(Math.floor(Date.now() / 1000)); return { ts, sig: crypto.createHmac('sha256', secret).update(ts + '.' + body).digest('hex') }; };\n\nconst item = $input.first().json;\nconst headers = item.headers || {};\nconst body = item.body || {};\nconst ts = String(headers['x-pulse-timestamp'] || '');\nconst sig = String(headers['x-pulse-signature'] || '');\nlet valid = false, reason = 'ok';\nif (!secret) { reason = 'PULSE_WEBHOOK_SECRET not set in n8n'; }\nelse if (!/^[0-9]+$/.test(ts) || !/^[0-9a-f]{64}$/.test(sig)) { reason = 'missing signature'; }\nelse if (Math.abs(Date.now() / 1000 - Number(ts)) > 300) { reason = 'stale timestamp'; }\nelse {\n  const expected = crypto.createHmac('sha256', secret).update(ts + '.' + canon(body)).digest('hex');\n  valid = crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(sig, 'hex'));\n  if (!valid) reason = 'invalid signature';\n}\nconst allowed = ['create_followup_task','notify_account_team','send_retention_email','schedule_account_review','offer_retention_discount'];\nif (valid && !allowed.includes(body.action_type)) { valid = false; reason = 'action type not allowed by workflow'; }\nif (valid && !(body.execution_id && body.idempotency_key && body.payload_hash && body.payload)) { valid = false; reason = 'incomplete envelope'; }\nreturn [{ json: { valid, reason, ...(valid ? body : {}), n8n_execution_id: $execution.id } }];"
+      }
+    },
+    {
+      "id": "if-valid",
+      "name": "Signature valid?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        440,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "accept",
+      "name": "Respond 202 accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        200
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ accepted: true, n8n_execution_id: String($execution.id), execution_id: $json.execution_id }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      }
+    },
+    {
+      "id": "deny",
+      "name": "Respond 401 rejected",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        420
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ accepted: false, reason: $json.reason }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      }
+    },
+    {
+      "id": "route",
+      "name": "Route by action type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        880,
+        200
+      ],
+      "parameters": {
+        "mode": "expression",
+        "numberOutputs": 5,
+        "output": "={{ ({create_followup_task:0, schedule_account_review:1, notify_account_team:2, send_retention_email:3, offer_retention_discount:4})[$json.action_type] }}"
+      }
+    },
+    {
+      "id": "create-follow-up-(pecal-api)",
+      "name": "Create follow-up (PeCal API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        0
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.PULSE_BACKEND_URL + '/api/v2/followups' }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  customer_id: $json.payload.customer_id,\n  owner: $json.payload.owner,\n  due_date: $json.payload.due_date,\n  note: '[Pulse ' + $json.execution_id + '] ' + $json.payload.note,\n  outcome: 'Timing to confirm',\n  request_key: $json.idempotency_key\n}) }}",
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "create-review-task-(pecal-api)",
+      "name": "Create review task (PeCal API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1120,
+        160
+      ],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.PULSE_BACKEND_URL + '/api/v2/followups' }}",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({\n  customer_id: $json.payload.customer_id,\n  owner: $json.payload.team,\n  due_date: $json.payload.review_date,\n  note: '[Pulse ' + $json.execution_id + '] Account review: ' + $json.payload.agenda,\n  outcome: 'Need confirmed',\n  request_key: $json.idempotency_key\n}) }}",
+        "options": {
+          "timeout": 10000
+        }
+      }
+    },
+    {
+      "id": "follow-up-result",
+      "name": "Follow-up result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1360,
+        80
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const env = $('Verify signature').first().json;\nconst created = $input.first().json;\nconst task = (created.payload && created.payload.task) || created.task || created.payload || {};\nconst result = { delivery: 'created', system: 'PeCal follow-ups API', followup_id: task.id || null, owner: env.payload.owner || env.payload.team };\nif (env.action_type === 'schedule_account_review') {\n  const d = env.payload.review_date.replace(/-/g, '');\n  result.calendar = 'no calendar provider configured — invite rendered as .ics text';\n  result.ics = ['BEGIN:VCALENDAR','VERSION:2.0','BEGIN:VEVENT','DTSTART;VALUE=DATE:' + d,'SUMMARY:Account review ' + env.payload.customer_id,'DESCRIPTION:' + env.payload.agenda.replace(/\\n/g,' '),'END:VEVENT','END:VCALENDAR'].join('\\r\\n');\n}\nreturn [{ json: { ...env, result } }];"
+      }
+    },
+    {
+      "id": "simulated-delivery-(no-provider)",
+      "name": "Simulated delivery (no provider)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        380
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const env = $input.first().json;\nconst p = env.payload;\nconst previews = {\n  notify_account_team: { channel: 'internal team feed', team: p.team, message: p.message,\n                         reason: 'No chat provider (Slack/Teams) configured in n8n; notification recorded as a preview.' },\n  send_retention_email: { to: p.recipient_email, subject: p.subject, body: p.body, language: p.language,\n                          reason: 'No SMTP credential configured and external delivery disabled; nothing was sent.' },\n  offer_retention_discount: { discount_pct: p.discount_pct, duration_months: p.duration_months, justification: p.justification,\n                              reason: 'No billing system connected; offer recorded for manual entry.' },\n};\nreturn [{ json: { ...env, result: { delivery: 'simulated', preview: previews[env.action_type] } } }];"
+      }
+    },
+    {
+      "id": "build-signed-callback",
+      "name": "Build signed callback",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1600,
+        240
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const canon = (v) => Array.isArray(v) ? '[' + v.map(canon).join(',') + ']'\n  : (v !== null && typeof v === 'object') ? '{' + Object.keys(v).sort().map(k => JSON.stringify(k) + ':' + canon(v[k])).join(',') + '}'\n  : JSON.stringify(v);\nconst crypto = require('crypto');\nconst secret = $env.PULSE_WEBHOOK_SECRET || '';\nconst sign = (body) => { const ts = String(Math.floor(Date.now() / 1000)); return { ts, sig: crypto.createHmac('sha256', secret).update(ts + '.' + body).digest('hex') }; };\n\nconst out = [];\nfor (const it of $input.all()) {\n  const j = it.json;\n  const env = j.execution_id ? j : $('Verify signature').first().json;\n  const failed = !!j.error || !j.result;\n  const msg = {\n    delivery_id: 'n8n-' + $execution.id + '-' + env.execution_id,\n    execution_id: env.execution_id,\n    idempotency_key: env.idempotency_key,\n    payload_hash: env.payload_hash,\n    n8n_execution_id: String($execution.id),\n    status: failed ? 'failed' : 'succeeded',\n    result: failed ? {} : j.result,\n    error: failed ? String((j.error && (j.error.message || j.error)) || 'handler produced no result').slice(0, 400) : null,\n  };\n  const body = JSON.stringify(msg);\n  const { ts, sig } = sign(body);\n  out.push({ json: { body, ts, sig } });\n}\nreturn out;"
+      }
+    },
+    {
+      "id": "callback-to-pecal-pulse",
+      "name": "Callback to PeCal Pulse",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1820,
+        240
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.PULSE_BACKEND_URL + '/api/pulse/n8n/callback' }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Pulse-Timestamp",
+              "value": "={{ $json.ts }}"
+            },
+            {
+              "name": "X-Pulse-Signature",
+              "value": "={{ $json.sig }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.body }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    }
+  ],
+  "connections": {
+    "Pulse execute webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify signature",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify signature": {
+      "main": [
+        [
+          {
+            "node": "Signature valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Signature valid?": {
+      "main": [
+        [
+          {
+            "node": "Respond 202 accepted",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond 401 rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond 202 accepted": {
+      "main": [
+        [
+          {
+            "node": "Route by action type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by action type": {
+      "main": [
+        [
+          {
+            "node": "Create follow-up (PeCal API)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create review task (PeCal API)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Simulated delivery (no provider)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Simulated delivery (no provider)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Simulated delivery (no provider)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create follow-up (PeCal API)": {
+      "main": [
+        [
+          {
+            "node": "Follow-up result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build signed callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create review task (PeCal API)": {
+      "main": [
+        [
+          {
+            "node": "Follow-up result",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build signed callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow-up result": {
+      "main": [
+        [
+          {
+            "node": "Build signed callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simulated delivery (no provider)": {
+      "main": [
+        [
+          {
+            "node": "Build signed callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build signed callback": {
+      "main": [
+        [
+          {
+            "node": "Callback to PeCal Pulse",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "PulseErrorHdl001",
+    "saveDataSuccessExecution": "all",
+    "saveDataErrorExecution": "all",
+    "executionTimeout": 120
+  },
+  "pinData": {},
+  "tags": []
+}
