@@ -1,0 +1,76 @@
+# One-command stack:  python3 scripts/setup_env.py && docker compose up --build
+#   Frontend  http://127.0.0.1:3000   (Pulse Ops: /pulse)
+#   Backend   http://127.0.0.1:8001   (health: /api/health, /api/pulse/status)
+#   n8n       http://127.0.0.1:5678   (editor; workflows imported + published by n8n-init)
+# All ports bind to localhost only. Secrets come from the ignored .env.
+name: pecal-pulse
+
+x-n8n-env: &n8n-env
+  N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?run python3 scripts/setup_env.py first}
+  PULSE_WEBHOOK_SECRET: ${PULSE_WEBHOOK_SECRET:?run python3 scripts/setup_env.py first}
+  PULSE_BACKEND_URL: ${PULSE_BACKEND_URL_COMPOSE:-http://backend:8001}
+  N8N_BLOCK_ENV_ACCESS_IN_NODE: "false"     # workflows read PULSE_* from env
+  NODE_FUNCTION_ALLOW_BUILTIN: crypto        # HMAC verification in Code nodes
+  N8N_DIAGNOSTICS_ENABLED: "false"
+  N8N_PERSONALIZATION_ENABLED: "false"
+  N8N_SECURE_COOKIE: "false"                 # local http only
+  GENERIC_TIMEZONE: Europe/Berlin
+  DB_SQLITE_POOL_SIZE: "2"
+
+services:
+  n8n-init:
+    image: docker.n8n.io/n8nio/n8n:2.48.7
+    environment: *n8n-env
+    entrypoint: ["/bin/sh", "/scripts/n8n-setup.sh"]
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./n8n/workflows:/workflows:ro
+      - ./scripts/n8n-setup.sh:/scripts/n8n-setup.sh:ro
+    restart: "no"
+
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.48.7
+    environment: *n8n-env
+    ports: ["127.0.0.1:5678:5678"]
+    volumes:
+      - n8n_data:/home/node/.n8n
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    depends_on:
+      n8n-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:5678/healthz >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  backend:
+    build: { context: ., dockerfile: docker/backend.Dockerfile }
+    env_file: .env
+    environment:
+      N8N_BASE_URL: http://n8n:5678
+      PULSE_CALLBACK_BASE_URL: http://backend:8001
+      PECAL_SNAPSHOT: ${PECAL_SNAPSHOT:-synthetic-pulse-demo}
+    ports: ["127.0.0.1:8001:8001"]
+    volumes:
+      - ./data/runtime:/app/data/runtime
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8001/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+  frontend:
+    build: { context: ., dockerfile: docker/frontend.Dockerfile }
+    environment:
+      BACKEND_URL: http://backend:8001
+    ports: ["127.0.0.1:3000:3000"]
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  n8n_data:

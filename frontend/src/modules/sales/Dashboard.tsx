@@ -379,7 +379,7 @@ export function Dashboard() {
                   }}
                 >
                   <i
-                    style={{ background: ["#72966a", "#edb482", "#a9bad8"][i] }}
+                    style={{ background: ["#72966a", "#7fa6f0", "#a9bad8"][i] }}
                   />
                   <span>{s}</span>
                   <b>{customers.filter((c) => c.segment === s).length}</b>

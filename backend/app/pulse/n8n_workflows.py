@@ -279,7 +279,7 @@ def error_workflow() -> dict:
     c = lambda node: {"node": node, "type": "main", "index": 0}
     connections = {"On workflow error": {"main": [[c("Sign failure report")]]},
                    "Sign failure report": {"main": [[c("Report failure to Pulse")]]}}
-    return {"id": ERROR_ID, "name": WORKFLOWS[2]["name"], "active": False, "nodes": nodes, "connections": connections,
+    return {"id": ERROR_ID, "name": WORKFLOWS[2]["name"], "active": True, "nodes": nodes, "connections": connections,
             "settings": {"executionOrder": "v1"}, "pinData": {}, "tags": []}
 
 

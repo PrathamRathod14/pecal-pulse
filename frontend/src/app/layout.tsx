@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./pulse/pulse.css";
 import { AppShell } from "@/components/layout/AppShell";
 export const metadata: Metadata = {
-  title: "PeCal Pulse · Sales workspace",
+  title: "SignalPilot · Agentic customer intelligence",
   description:
     "Mock sales-assistant workspace for the Perschmann calibration hackathon.",
 };

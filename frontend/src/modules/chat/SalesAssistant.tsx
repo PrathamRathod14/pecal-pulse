@@ -309,7 +309,7 @@ function AssistantMessage() {
     <MessagePrimitive.Root className="chat-message assistant-message">
       <div className="assistant-mark">
         <Sparkles size={14} />
-        <span>Pulse</span>
+        <span>Pilot</span>
       </div>
       <ChatParts />
       {!!record?.actions?.length && (
@@ -350,7 +350,7 @@ export function SalesAssistant() {
       aria-label="Sales assistant"
     >
       <div className="chat-header compact-chat-header">
-        <strong>Pulse</strong>
+        <strong>SignalPilot</strong>
         <div className="chat-header-actions">
           <button
             className="icon-button"

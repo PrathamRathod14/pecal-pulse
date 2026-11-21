@@ -96,7 +96,7 @@ def fallback(evidence: dict) -> StrategyOutput:
                 body=(f"Dear {cust['crm']['contact_name'] or 'customer'},\n\nwe noticed fewer calibration orders from your team in recent months "
                       f"and want to make sure everything is on track. {risk.get('due_sentence', '')} "
                       "If turnaround times or scheduling are a concern, we would be glad to discuss options that fit your plan.\n\n"
-                      "Kind regards,\nYour PeCal account team"),
+                      "Kind regards,\nYour SignalPilot account team"),
             ))
         else:
             actions.append(StrategyAction(

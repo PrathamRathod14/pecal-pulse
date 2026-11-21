@@ -25,10 +25,10 @@ export function LandingPage() {
     <div className="landing-shell">
       <div className="landing-background" aria-hidden="true">
         <PredictiveArcSignal
-          background="#fcf9f5"
-          baseColor="#dbc9b8"
-          accentColor="#b78c6a"
-          highlight="#e5a777"
+          background="#f5f8fe"
+          baseColor="#b7c6dc"
+          accentColor="#6888b9"
+          highlight="#749ce8"
           density={130}
           dotSize={90}
           speed={22}
@@ -40,29 +40,33 @@ export function LandingPage() {
         <Link
           href="/"
           className="landing-brand"
-          aria-label="Perschmann Hack home"
+          aria-label="SignalPilot home"
         >
-          Perschmann Hack
+          Signal<span className="landing-brand-accent">Pilot</span>
         </Link>
       </header>
       <main>
         <section className="landing-hero" aria-labelledby="landing-heading">
           <div className="landing-container landing-hero-inner">
             <div className="landing-copy">
-              <p className="landing-eyebrow">Turn calibration history into action</p>
+              <p className="landing-eyebrow">Introducing SignalPilot</p>
               <h1 id="landing-heading">
-                Know where to focus next.
+                From customer signals to <span className="landing-accent">trusted action.</span>
               </h1>
               <p className="landing-description" id="about">
-                Turn calibration history into clear customer priorities,
-                forecasts, and better sales conversations.
+                An agentic AI platform for customer intelligence, risk detection
+                and secure workflows.
               </p>
+              <p className="landing-stack">AGENTS · GEMINI · PULSEGUARD · N8N</p>
               <div className="landing-actions">
                 <Link
                   href="/dashboard"
                   className="landing-button landing-button-primary"
                 >
                   Open Dashboard <ArrowRight size={23} aria-hidden="true" />
+                </Link>
+                <Link href="/pulse" className="landing-button">
+                  Open Agent Ops
                 </Link>
               </div>
             </div>

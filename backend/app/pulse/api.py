@@ -356,7 +356,9 @@ async def trigger_scan(request: Request, actor: Actor = Depends(current_actor)):
     require_csrf(request)
     require(actor, "action:approve:standard")
     settings = get_settings()
-    body = json.dumps({"requested_by": actor.id}).encode()
+    from .actions import canonical
+
+    body = canonical({"requested_by": actor.id}).encode()  # n8n verifies over canonical JSON
     try:
         ts, sig = guard.sign(body)
     except RuntimeError:

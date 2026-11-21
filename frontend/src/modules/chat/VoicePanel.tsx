@@ -333,8 +333,8 @@ export function VoicePanel() {
           state={!configured || !chatReady ? "disabled" : displayed}
           levelRef={state === "listening" ? adapter?.levelRef : undefined}
           size={84}
-          colorFrom="#b96532"
-          colorTo="#f5b079"
+          colorFrom="#2f5fbc"
+          colorTo="#76a2f8"
           label={displayed}
         />
         <span className="voice-orb-icon">{active && <Square size={17} />}</span>

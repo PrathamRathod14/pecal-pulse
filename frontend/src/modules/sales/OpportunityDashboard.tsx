@@ -1,4 +1,5 @@
 "use client";
+import { PulseDashboardStrip } from "@/modules/pulse/Embeds";
 import { useEffect, useState } from "react";
 import type { EChartsOption } from "echarts";
 import { ArrowUpRight, Download, Save, X } from "lucide-react";
@@ -207,7 +208,7 @@ export function OpportunityDashboard() {
   const exportList = () => {
     if (!data) return;
     const lines = [
-      `PeCal Pulse · ${data.items.length} accounts from ${data.selected_count} selected`,
+      `SignalPilot · ${data.items.length} accounts from ${data.selected_count} selected`,
       `History reference: ${data.metadata.reference_date}; generated: ${new Date().toISOString()}`,
       `Model: ${data.model_version}; selection: ${data.selection_revision}`,
       `Filters: ${JSON.stringify(data.filters)}; cluster: ${data.selected_cluster || "all"}`,
@@ -263,7 +264,7 @@ export function OpportunityDashboard() {
           name: "Relative action urgency →",
           nameLocation: "middle",
           nameGap: 40,
-          splitLine: { lineStyle: { color: "#eee5dc" } },
+          splitLine: { lineStyle: { color: "#dce3ee" } },
           axisLine: { show: false },
         },
         yAxis: {
@@ -273,7 +274,7 @@ export function OpportunityDashboard() {
           axisLabel: { formatter: axisNumber },
           name: "Relative opportunity size",
           nameGap: 14,
-          splitLine: { lineStyle: { color: "#eee5dc" } },
+          splitLine: { lineStyle: { color: "#dce3ee" } },
           axisLine: { show: false },
         },
         dataZoom: [
@@ -354,7 +355,7 @@ export function OpportunityDashboard() {
                 label: {
                   show: true,
                   formatter: c.label,
-                  color: "#44352b",
+                  color: "#13203a",
                   fontSize: 11,
                   position: "top" as const,
                 },
@@ -370,6 +371,7 @@ export function OpportunityDashboard() {
           <h1>Opportunity dashboard</h1>
         </div>
       </div>
+      <PulseDashboardStrip />
       <div className="filters opportunity-filters">
         {(
           [

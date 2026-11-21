@@ -153,7 +153,7 @@ export function PredictiveArcSignal(props: PredictiveArcSignalProps) {
     background = "#20384a",
     baseColor = "#274c67",
     accentColor = "#2c5d81",
-    highlight = "#ff6f00",
+    highlight = "#1f6bff",
     density = 160,
     dotSize = 100,
     speed = 50,

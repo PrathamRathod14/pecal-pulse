@@ -1,4 +1,5 @@
 "use client";
+import { InvestigateButton } from "@/modules/pulse/Embeds";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { useSalesStore } from "./store";
@@ -1128,6 +1129,7 @@ export function CustomerEvidence({
             <div className="customer-account-identity">
               <h2>{d.profile.display_name}</h2>
               <p>{d.profile.industry_label || "Sector not supplied"}</p>
+              <InvestigateButton customerId={d.profile.customer_id} />
             </div>
             <div
               className="customer-tabs"
@@ -1288,7 +1290,7 @@ export function CustomerEvidence({
                             show: true,
                             position: "insideTop",
                             distance: 6,
-                            color: "#754321",
+                            color: "#1f3d77",
                             fontSize: 16,
                             fontWeight: 800,
                             lineHeight: 20,

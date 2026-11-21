@@ -44,7 +44,7 @@ export function LandingSignal() {
             cx={x}
             cy={y}
             r={radius}
-            fill={orange ? "#ffb774" : "#83b6ed"}
+            fill={orange ? "#74a3ff" : "#83b6ed"}
             opacity={opacity}
           />
         ))}

@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   UsersRound,
   ChartNoAxesCombined,
+  Bot,
   Sparkles,
   Check,
   X,
@@ -28,6 +29,7 @@ const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/customers", label: "Customers", icon: UsersRound },
   { href: "/insights", label: "Insights", icon: ChartNoAxesCombined },
+  { href: "/pulse", label: "Agent Ops", icon: Bot },
 ];
 export function AppShell({ children }: { children: ReactNode }) {
   const reducedMotion = useReducedMotion();
@@ -91,13 +93,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           <Link
             href="/dashboard"
             className="brand"
-            aria-label="PeCal Pulse dashboard"
+            aria-label="SignalPilot dashboard"
           >
             <span className="brand-icon">
-              p<span />
+              s<span />
             </span>
             <span className="brand-name">
-              PeCal<span>pulse</span>
+              Signal<span>Pilot</span>
             </span>
           </Link>
           <nav aria-label="Main navigation">
@@ -105,8 +107,8 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Link
                 key={n.href}
                 href={n.href}
-                className={`nav-link ${pathname === n.href || (n.href === "/customers" && pathname === "/follow-ups") ? "active" : ""}`}
-                aria-current={pathname === n.href ? "page" : undefined}
+                className={`nav-link ${pathname === n.href || (n.href === "/customers" && pathname === "/follow-ups") || (n.href === "/pulse" && pathname.startsWith("/pulse/")) ? "active" : ""}`}
+                aria-current={pathname === n.href || (n.href === "/pulse" && pathname.startsWith("/pulse/")) ? "page" : undefined}
               >
                 <n.icon size={18} />
                 <span>{n.label}</span>
@@ -123,18 +125,20 @@ export function AppShell({ children }: { children: ReactNode }) {
             aria-expanded={assistantOpen}
           >
             <Sparkles size={17} />
-            <span>Ask Pulse</span>
+            <span>Ask SignalPilot</span>
           </button>
         </header>
         <main className="main">
           <motion.div
-            key={pathname}
+            key={pathname.startsWith("/pulse") ? "/pulse" : pathname}
             className="page-content"
             initial={reducedMotion ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: reducedMotion ? 0 : 0.22 }}
           >
-            {v2 ? (
+            {pathname.startsWith("/pulse") ? (
+              children
+            ) : v2 ? (
               <IntegratedWorkspace />
             ) : (
               <div className="card">

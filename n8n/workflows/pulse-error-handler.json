@@ -1,7 +1,7 @@
 {
   "id": "PulseErrorHdl001",
   "name": "PeCal Pulse – Error handler",
-  "active": false,
+  "active": true,
   "nodes": [
     {
       "id": "error-trigger",

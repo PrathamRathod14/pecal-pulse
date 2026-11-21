@@ -1,0 +1,12 @@
+.git
+.venv
+**/__pycache__
+frontend/node_modules
+frontend/.next
+data/runtime
+.env
+.env.*
+!.env.example
+analysis/customers
+chl_media
+docs/screenshots
