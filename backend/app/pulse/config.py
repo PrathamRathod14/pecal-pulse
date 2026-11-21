@@ -22,7 +22,7 @@ class PulseSettings(BaseSettings):
 
     # Gemini (Google Gen AI SDK)
     gemini_api_key: SecretStr = SecretStr("")
-    gemini_model: str = "gemini-2.5-flash"
+    gemini_model: str = "gemini-3.5-flash"
     gemini_timeout_seconds: float = Field(default=40.0, gt=0, le=180)
     gemini_max_attempts: int = Field(default=3, ge=1, le=5)
 

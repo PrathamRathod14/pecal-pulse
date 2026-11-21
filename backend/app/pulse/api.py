@@ -55,7 +55,7 @@ async def status():
         "demo_mode": settings.pulse_demo_mode,
         "auth_mode": settings.pulse_auth_mode,
         "schema_version": schema_version(),
-        "gemini": {"configured": settings.gemini_configured, "model": settings.gemini_model,
+        "gemini": {"configured": settings.gemini_configured, "model": _gemini_probe().get("model") or settings.gemini_model,
                    "missing_env": None if settings.gemini_configured else "GEMINI_API_KEY",
                    "verified": _gemini_probe().get("ok"), "mode": _gemini_probe().get("mode"),
                    "problem": None if _gemini_probe().get("ok") else _gemini_probe().get("reason")},
