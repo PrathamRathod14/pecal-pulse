@@ -3731,3 +3731,14 @@ body {
     var(--bg);
   background-attachment: fixed;
 }
+.assistant-setup-note {
+  margin: 8px 16px 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: #fdf3e6;
+  color: #7b5525;
+  font-size: 12px;
+}
+.assistant-setup-note code {
+  margin: 0 3px;
+}

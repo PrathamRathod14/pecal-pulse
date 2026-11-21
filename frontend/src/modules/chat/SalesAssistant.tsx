@@ -7,11 +7,15 @@ import {
   ThreadPrimitive,
   MessagePrimitive,
   ActionBarPrimitive,
+  ComposerPrimitive,
   AuiIf,
   useAuiState,
   type ThreadMessageLike,
 } from "@assistant-ui/react";
 import {
+  ArrowUp,
+  Keyboard,
+  Square,
   ArrowDown,
   Copy,
   Sparkles,
@@ -334,6 +338,43 @@ function AssistantMessage() {
     </MessagePrimitive.Root>
   );
 }
+function AssistantComposer() {
+  const language = useSalesStore((s) => s.assistantLanguage);
+  const busy = useSalesStore((s) => s.voiceBusy);
+  const running = useAuiState((s) => s.thread.isRunning);
+  const german = language === "de";
+  return (
+    <div className="composer-wrap">
+      <ComposerPrimitive.Root className="composer">
+        <ComposerPrimitive.Input
+          aria-label={german ? "Nachricht" : "Message"}
+          placeholder={german ? "Nachricht eingeben…" : "Type a message…"}
+          lang={language}
+          maxLength={2000}
+          disabled={busy}
+          minRows={2}
+          maxRows={5}
+          autoFocus={false}
+          cancelOnEscape={false}
+        />
+        <div className="composer-bottom">
+          <span role="status">
+            {german ? "Enter zum Senden · Shift+Enter für neue Zeile" : "Enter to send · Shift+Enter for a new line"}
+          </span>
+          {running ? (
+            <ComposerPrimitive.Cancel className="send-button" aria-label={german ? "Antwort stoppen" : "Stop reply"}>
+              <Square size={15} />
+            </ComposerPrimitive.Cancel>
+          ) : (
+            <ComposerPrimitive.Send className="send-button" disabled={busy} aria-label={german ? "Nachricht senden" : "Send message"}>
+              <ArrowUp size={17} />
+            </ComposerPrimitive.Send>
+          )}
+        </div>
+      </ComposerPrimitive.Root>
+    </div>
+  );
+}
 export function SalesAssistant() {
   const open = useSalesStore((s) => s.assistantOpen),
     expanded = useSalesStore((s) => s.assistantExpanded),
@@ -342,8 +383,20 @@ export function SalesAssistant() {
     language = useSalesStore((s) => s.assistantLanguage),
     set = useSalesStore((s) => s.set),
     chatLoading = useSalesStore((s) => s.chatLoading),
-    running = useAuiState((s) => s.thread.isRunning);
+    running = useAuiState((s) => s.thread.isRunning),
+    chatStatus = useSalesStore((s) => s.chatStatus);
+  const [voiceConfigured, setVoiceConfigured] = useState<boolean | null>(null);
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    fetch("/api/sales/voice/status")
+      .then((r) => r.json())
+      .then((v) => setVoiceConfigured(!!v.configured))
+      .catch(() => setVoiceConfigured(false));
+  }, [open]);
   if (!open) return null;
+  // Text input is the fallback whenever voice cannot be used, and on request.
+  const showComposer = voiceConfigured === false || typing;
   return (
     <aside
       className={`chat-drawer voice-drawer${expanded ? " expanded" : ""}${expanded && side === "left" ? " dock-left" : ""}`}
@@ -370,6 +423,17 @@ export function SalesAssistant() {
           >
             <Plus size={17} />
           </button>
+          {voiceConfigured && (
+            <button
+              className="icon-button"
+              aria-label={typing ? "Hide keyboard input" : "Type instead of speaking"}
+              title={typing ? "Hide keyboard input" : "Type instead"}
+              aria-pressed={typing}
+              onClick={() => setTyping(!typing)}
+            >
+              <Keyboard size={17} />
+            </button>
+          )}
           {expanded && (
             <button
               className="icon-button"
@@ -404,6 +468,12 @@ export function SalesAssistant() {
         </div>
       </div>
       <ThreadPrimitive.Root className="chat-thread">
+        {chatStatus && !chatStatus.configured && (
+          <p className="assistant-setup-note" role="status">
+            Chat needs a model key: add <code>GEMINI_API_KEY</code> (or <code>OPENROUTER_API_KEY</code>) to the root
+            <code>.env</code> and restart the backend. Agent Ops works without it.
+          </p>
+        )}
         <VoicePanel key={`${voiceResetRevision}-${language}`} />
         <ThreadPrimitive.Viewport className="chat-viewport">
           <ThreadPrimitive.Messages>
@@ -416,6 +486,7 @@ export function SalesAssistant() {
           <ArrowDown size={13} />
           Latest
         </ThreadPrimitive.ScrollToBottom>
+        {showComposer && <AssistantComposer />}
       </ThreadPrimitive.Root>
     </aside>
   );

@@ -227,14 +227,15 @@ def build() -> tuple[dict, dict]:
 
 
 def write(force: bool = False) -> Path:
-    if SNAPSHOT_PATH.exists() and CRM_PATH.exists() and not force:
+    if SNAPSHOT_PATH.exists() and not force:
         return SNAPSHOT_PATH
     document, crm = build()
     SNAPSHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
     # Manifest first: the loader reads only the header to enumerate snapshots.
     ordered = {"manifest": document["manifest"], **{k: v for k, v in document.items() if k != "manifest"}}
-    SNAPSHOT_PATH.write_text(json.dumps(ordered, ensure_ascii=False), encoding="utf-8")
-    CRM_PATH.write_text(json.dumps(crm, ensure_ascii=False, indent=2), encoding="utf-8")
+    SNAPSHOT_PATH.write_text(json.dumps(ordered, ensure_ascii=False), encoding="utf-8", newline="\n")
+    if force or not CRM_PATH.exists():  # committed file: never rewrite it needlessly
+        CRM_PATH.write_text(json.dumps(crm, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
     return SNAPSHOT_PATH
 
 

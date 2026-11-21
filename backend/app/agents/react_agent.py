@@ -208,7 +208,17 @@ class AgentService:
 async def agent_lifespan(settings=None, model=None):
     settings = settings or Settings()
     settings.db_path.parent.mkdir(parents=True, exist_ok=True)
-    configured = model is not None or bool(settings.openrouter_api_key.get_secret_value())
+    import os
+    gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
+    use_gemini = model is None and not settings.openrouter_api_key.get_secret_value() and bool(gemini_key)
+    configured = model is not None or bool(settings.openrouter_api_key.get_secret_value()) or use_gemini
+    model_name = settings.llm_model
+    if use_gemini:
+        # OpenRouter remains the primary provider; Gemini serves chat when it is the only key present.
+        from langchain_google_genai import ChatGoogleGenerativeAI
+        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        model = ChatGoogleGenerativeAI(model=model_name, google_api_key=gemini_key, temperature=0,
+                                       timeout=45, max_retries=1)
     model = model if model is not None else ChatOpenRouter(
         api_key=settings.openrouter_api_key.get_secret_value() or "missing",
         base_url="https://openrouter.ai/api/v1", model=settings.llm_model,
@@ -220,6 +230,6 @@ async def agent_lifespan(settings=None, model=None):
         graph = create_agent(model, tools=list(get_agent_tools().values()),
                              middleware=[workspace_prompt, handle_tool_validation], checkpointer=saver,
                              context_schema=TurnContext)
-        service = AgentService(graph, settings.db_path, configured, settings.llm_model)
+        service = AgentService(graph, settings.db_path, configured, model_name)
         await service.setup()
         yield service

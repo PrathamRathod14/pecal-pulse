@@ -59,7 +59,8 @@ if ($dockerOk) {
             "`$env:N8N_BLOCK_ENV_ACCESS_IN_NODE='false'; `$env:NODE_FUNCTION_ALLOW_BUILTIN='crypto'; " +
             "`$env:N8N_DIAGNOSTICS_ENABLED='false'; `$env:N8N_SECURE_COOKIE='false'; `$env:PULSE_BACKEND_URL='http://127.0.0.1:8001'; "
   $n8n = "npx --yes $nodePkg-p n8n@2.48.7 n8n"
-  $cmd = "$n8nEnv Write-Host 'Importing SignalPilot workflows into n8n (first run downloads n8n, a few minutes)...'; " +
+  $logFile = Join-Path $root "data\runtime\n8n-window.log"
+  $cmd = "Start-Transcript -Path '$logFile' -Force | Out-Null; Write-Host ('node ' + (node --version)); $n8nEnv Write-Host 'Importing SignalPilot workflows into n8n (first run downloads n8n, a few minutes)...'; " +
          "$n8n import:workflow --separate --input='$root\n8n\workflows'; " +
          "foreach (`$id in 'PulseErrorHdl001','PulseExecute0001','PulseRiskScan001') { $n8n publish:workflow --id=`$id }; " +
          "$n8n start"
