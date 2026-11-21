@@ -108,9 +108,11 @@ def open_customer_preview(customer_id: str, runtime: ToolRuntime[TurnContext]) -
 @tool
 def set_workspace_view(runtime: ToolRuntime[TurnContext], customer_view: Literal["accounts", "follow-ups"] | None = None,
     customer_offset: int | None = None, dashboard_offset: int | None = None,
-    display_limit: Literal[100,200,500,1000] | None = None, close_preview: bool = False) -> dict:
-    """Switch Customers Accounts/Follow-ups, paginate either list (offset is zero-based), change Dashboard plotted sample, or close its preview. Sample never changes cohort totals. Opens Customers when customer_view supplied."""
+    display_limit: int | None = None, close_preview: bool = False) -> dict:
+    """Switch Customers Accounts/Follow-ups, paginate either list (offset is zero-based), change Dashboard plotted sample (display_limit: 100, 200, 500 or 1000), or close its preview. Sample never changes cohort totals. Opens Customers when customer_view supplied."""
     runtime.context.consume()
+    if display_limit is not None and display_limit not in (100, 200, 500, 1000):
+        raise ValueError("display_limit must be 100, 200, 500 or 1000")
     w = runtime.context.workspace
     if customer_offset is not None and (customer_offset < 0 or customer_offset % 20):
         raise ValueError("Customer offset must be a nonnegative multiple of 20")
@@ -225,9 +227,11 @@ def set_customer_tab(tab: Literal["activity", "portfolio", "next-step"], runtime
     return emit(runtime, "ui.control.set", payload)
 
 @tool
-def set_action_limit(limit: Literal[5, 10, 12], runtime: ToolRuntime[TurnContext]) -> dict:
+def set_action_limit(limit: int, runtime: ToolRuntime[TurnContext]) -> dict:
     """Set Dashboard shortlist size to 5, 10 or 12 accounts."""
     runtime.context.consume()
+    if limit not in (5, 10, 12):
+        raise ValueError("limit must be 5, 10 or 12")
     runtime.context.workspace.action_limit = limit
     runtime.context.workspace.dashboard_offset = 0
     runtime.context.workspace.page_snapshot = None
@@ -313,9 +317,11 @@ def get_opportunity_cohort(runtime: ToolRuntime[TurnContext], cluster_id: str | 
 @tool
 def set_opportunity_filters(runtime: ToolRuntime[TurnContext], industry: str | None = None, segment: str | None = None,
     group: str | None = None, purpose: Literal["all", "upcoming", "inactivity", "discovery"] | None = None,
-    window_days: Literal[30,60,90] | None = None, include_inferred: bool | None = None, include_past_due: bool | None = None) -> dict:
-    """Change Dashboard opportunity filters; exact sector/equipment/segment IDs come from get_opportunity_cohort. Reset a dropdown with all. Clears cluster selection."""
+    window_days: int | None = None, include_inferred: bool | None = None, include_past_due: bool | None = None) -> dict:
+    """Change Dashboard opportunity filters (window_days: 30, 60 or 90); exact sector/equipment/segment IDs come from get_opportunity_cohort. Reset a dropdown with all. Clears cluster selection."""
     runtime.context.consume()
+    if window_days is not None and window_days not in (30, 60, 90):
+        raise ValueError("window_days must be 30, 60 or 90")
     from ...contracts.opportunities import OpportunityFilters
     values = {k:v for k,v in locals().items() if k != "runtime" and v is not None and k in OpportunityFilters.model_fields}
     merged = OpportunityFilters(**{**runtime.context.workspace.opportunity_filters.model_dump(), **values})
