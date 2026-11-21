@@ -17,7 +17,7 @@ from ..capabilities import data
 from .config import get_settings
 
 ROOT = Path(__file__).resolve().parents[3]
-CRM_FILE = ROOT / "data/mock/pulse_demo_crm.json"
+CRM_FILE = ROOT / "data/mock/signalpilot_demo_crm.json"
 
 
 @lru_cache(maxsize=4)

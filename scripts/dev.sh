@@ -25,7 +25,7 @@ done
 
 [ -d .venv ] || uv sync
 [ -d frontend/node_modules ] || (cd frontend && pnpm install --frozen-lockfile)
-uv run python -m backend.app.pulse.demo_data >/dev/null
+uv run python -m backend.app.pulse.demo_data --with-analytics
 
 pids=()
 cleanup() {

@@ -39,6 +39,11 @@ def _row(r) -> dict:
 
 # ---------------------------------------------------------------- status & auth
 
+def _gemini_probe() -> dict:
+    from . import gemini
+
+    return gemini.probe_result
+
 @router.get("/status")
 async def status():
     from . import n8n
@@ -51,7 +56,9 @@ async def status():
         "auth_mode": settings.pulse_auth_mode,
         "schema_version": schema_version(),
         "gemini": {"configured": settings.gemini_configured, "model": settings.gemini_model,
-                   "missing_env": None if settings.gemini_configured else "GEMINI_API_KEY"},
+                   "missing_env": None if settings.gemini_configured else "GEMINI_API_KEY",
+                   "verified": _gemini_probe().get("ok"), "mode": _gemini_probe().get("mode"),
+                   "problem": None if _gemini_probe().get("ok") else _gemini_probe().get("reason")},
         "n8n": {**n8n_health, "webhook_secret_configured": bool(settings.pulse_webhook_secret.get_secret_value())},
         "email": {"external_delivery": settings.allow_external_email,
                   "mode": "external (via n8n SMTP)" if settings.allow_external_email else "simulated preview"},

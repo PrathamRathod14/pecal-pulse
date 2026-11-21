@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import random
+import sys
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -26,7 +27,8 @@ from ..capabilities.data.build_snapshot import build_snapshot
 ROOT = Path(__file__).resolve().parents[3]
 SNAPSHOT_ID = "synthetic-pulse-demo"
 SNAPSHOT_PATH = ROOT / "data/runtime/snapshots" / f"{SNAPSHOT_ID}.json"
-CRM_PATH = ROOT / "data/mock/pulse_demo_crm.json"
+CRM_PATH = ROOT / "data/mock/signalpilot_demo_crm.json"
+DATASET_VERSION = "pulse_demo_v2"
 
 HISTORY_START = "2024-01"
 COMPLETE_THROUGH = "2026-08"
@@ -78,6 +80,25 @@ ACCOUNTS: list[tuple[str, str, str, int, str]] = [
     ("DEMO-024", "Präzitec Drehteile GmbH", "Mechanical engineering", 12, "steady"),
 ]
 
+_PREFIX = ["Alt", "Berg", "Blau", "Donau", "Eifel", "Elb", "Fels", "Hansa", "Harz", "Isar", "Kraft", "Lahn",
+           "Main", "Mosel", "Neckar", "Nord", "Ost", "Rhein", "Ruhr", "Saar", "Spree", "Süd", "Tal", "Weser"]
+_SUFFIX = ["Messtechnik", "Präzision", "Werkzeugbau", "Anlagenbau", "Medizintechnik", "Elektronik", "Hydraulik",
+           "Fertigung", "Labor", "Antriebe", "Energietechnik", "Lebensmittel"]
+_BG_PATTERNS = ["steady", "intermittent", "intermittent", "churned", "new", "seasonal", "moderate_decline", "growing"]
+
+
+def background_accounts(n: int = 156) -> list[tuple[str, str, str, int, str]]:
+    """Deterministic smaller accounts so the offline models see realistic variety
+    (pauses, churn, late starts). Values stay below the 24 story accounts."""
+    rng = random.Random(7)
+    out = []
+    for i in range(n):
+        name = f"{_PREFIX[i % len(_PREFIX)]}{_SUFFIX[(i * 7) % len(_SUFFIX)].lower()} {['GmbH', 'AG', 'KG'][i % 3]}"
+        out.append((f"DEMO-{i + 25:03d}", name, INDUSTRIES[(i * 5) % len(INDUSTRIES)], rng.randint(2, 12),
+                    _BG_PATTERNS[rng.randrange(len(_BG_PATTERNS))]))
+    return out
+
+
 # Synthetic CRM context. Notes are free text the Customer Intelligence agent
 # retrieves as evidence. DEMO-007 deliberately contains a prompt-injection
 # payload used by the adversarial scenario: it must be treated as data.
@@ -119,6 +140,12 @@ def _volume(pattern: str, base: int, index: int, total: int, month: str, rng: ra
         factor = 1.0 if remaining > 6 else 0.6
     elif pattern == "gone_silent":
         factor = 0.0 if remaining <= 6 else 1.0
+    elif pattern == "intermittent":
+        return round(base * rng.uniform(0.5, 1.6)) if rng.random() < 0.45 else 0
+    elif pattern == "churned":
+        factor = 1.0 if index < total * 0.55 else 0.0
+    elif pattern == "new":
+        factor = 0.0 if index < total * 0.4 else 1.0
     elif pattern == "growing":
         factor = 0.7 + 0.9 * (index / total)
     elif pattern == "seasonal":
@@ -134,7 +161,7 @@ def build() -> tuple[dict, dict]:
     monthly, industry_rows, groups_rows, instruments, events = [], [], [], [], []
     reference = date.fromisoformat(REFERENCE_DATE)
     event_seq = 0
-    for cid, _name, industry, base, pattern in ACCOUNTS:
+    for cid, _name, industry, base, pattern in ALL_ACCOUNTS:
         industry_rows.append({"customer": cid, "industry": industry})
         account_groups = rng.sample(GROUPS, k=rng.randint(2, 4))
         volumes = [_volume(pattern, base, i, len(months), month, rng) for i, month in enumerate(months, start=1)]
@@ -200,12 +227,12 @@ def build() -> tuple[dict, dict]:
         complete_through_month=COMPLETE_THROUGH,
         history_start=HISTORY_START,
     )
-    names = {cid: name for cid, name, *_ in ACCOUNTS}
+    names = {cid: name for cid, name, *_ in ALL_ACCOUNTS}
     for profile in document["profiles"]:
         profile["display_name"] = f"{names[profile['customer_id']]} (demo)"
         profile["name_source"] = "verified"
     document["manifest"]["quality_flags"] = sorted(
-        set(document["manifest"].get("quality_flags", [])) | {"synthetic_fixture", "pulse_demo_dataset"}
+        set(document["manifest"].get("quality_flags", [])) | {"synthetic_fixture", "pulse_demo_dataset", DATASET_VERSION}
     )
     crm = {
         "synthetic": True,
@@ -217,17 +244,28 @@ def build() -> tuple[dict, dict]:
                 "email": f"procurement.{cid.lower()}@example.com",
                 "verified": True,
             }
-            for cid, name, *_ in ACCOUNTS
+            for cid, name, *_ in ALL_ACCOUNTS
             if cid not in ("DEMO-010", "DEMO-020")  # some accounts lack a contact on file
         },
-        "account_owners": {cid: ("Team North" if i % 2 == 0 else "Team South") for i, (cid, *_rest) in enumerate(ACCOUNTS)},
+        "account_owners": {cid: ("Team North" if i % 2 == 0 else "Team South") for i, (cid, *_rest) in enumerate(ALL_ACCOUNTS)},
         "notes": NOTES,
     }
     return document, crm
 
 
+ALL_ACCOUNTS = ACCOUNTS + background_accounts()
+
+
+def _current_version() -> bool:
+    try:
+        with SNAPSHOT_PATH.open(encoding="utf-8") as f:
+            return DATASET_VERSION in f.read(4096)
+    except OSError:
+        return False
+
+
 def write(force: bool = False) -> Path:
-    if SNAPSHOT_PATH.exists() and not force:
+    if SNAPSHOT_PATH.exists() and not force and _current_version():
         return SNAPSHOT_PATH
     document, crm = build()
     SNAPSHOT_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -239,9 +277,42 @@ def write(force: bool = False) -> Path:
     return SNAPSHOT_PATH
 
 
-if __name__ == "__main__":
-    import sys
+ANALYTICS_ROOT = ROOT / "data/runtime/analytics-v3"
 
+
+def ensure_analytics(force: bool = False) -> bool:
+    """Publish offline analytics for the demo snapshot (once per dataset version)."""
+    import os
+    import subprocess
+
+    target = ANALYTICS_ROOT / SNAPSHOT_ID
+    marker = target / ".demo_version"
+    if not force and marker.exists() and marker.read_text(encoding="utf-8").strip() == DATASET_VERSION:
+        return False
+    if target.exists():
+        import shutil
+        shutil.rmtree(target)
+    env = {**os.environ, "PECAL_ANALYTICS_ROOT": str(ANALYTICS_ROOT)}
+    root = ["--analytics-root", str(ANALYTICS_ROOT)]
+    steps = [
+        ["analysis.build_runtime_snapshot", "--snapshot-id", SNAPSHOT_ID],
+        ["analysis.challenge2_ml.run", "--snapshot-id", SNAPSHOT_ID, "--output", str(ANALYTICS_ROOT)],
+        ["analysis.build_opportunities", "--snapshot-id", SNAPSHOT_ID],
+        ["analysis.build_retention", "--snapshot-id", SNAPSHOT_ID, *root],
+        ["analysis.evaluate_volume", "--snapshot-id", SNAPSHOT_ID, *root],
+        ["analysis.build_insights", "--snapshot-id", SNAPSHOT_ID, *root],
+    ]
+    for step in steps:
+        subprocess.run([sys.executable, "-m", *step], cwd=ROOT, env=env, check=True,
+                       stdout=subprocess.DEVNULL)
+    marker.write_text(DATASET_VERSION, encoding="utf-8")
+    return True
+
+
+if __name__ == "__main__":
     path = write(force="--force" in sys.argv)
     doc = json.loads(path.read_text(encoding="utf-8"))
     print(json.dumps({"snapshot": str(path.relative_to(ROOT)), "row_counts": doc["manifest"]["row_counts"]}))
+    if "--with-analytics" in sys.argv:
+        built = ensure_analytics(force="--force" in sys.argv)
+        print("analytics:", "published" if built else "up to date")

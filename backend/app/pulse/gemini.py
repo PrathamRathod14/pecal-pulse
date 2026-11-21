@@ -28,6 +28,14 @@ class LLMUnavailable(Exception):
 
 _client = None
 _client_key = None
+_mode: str | None = None  # "developer" (AI Studio) or "vertex" (Vertex AI express mode)
+probe_result: dict = {"checked": False}
+
+
+def _make_client(key: str, mode: str):
+    from google import genai
+
+    return genai.Client(vertexai=True, api_key=key) if mode == "vertex" else genai.Client(api_key=key)
 
 
 def _get_client():
@@ -37,11 +45,45 @@ def _get_client():
     if not key:
         raise LLMUnavailable("not_configured", "GEMINI_API_KEY is not set")
     if _client is None or _client_key != key:
-        from google import genai
-
-        _client = genai.Client(api_key=key)
+        _client = _make_client(key, _mode or "developer")
         _client_key = key
     return _client
+
+
+def current_mode() -> str:
+    return _mode or "developer"
+
+
+async def probe(timeout: float = 15.0) -> dict:
+    """One tiny request at startup to verify the key and pick the endpoint.
+
+    AI Studio keys use the Gemini Developer API; keys created for Vertex AI
+    express mode (often starting with "AQ.") need vertexai=True. Never logs the key.
+    """
+    global _client, _client_key, _mode, probe_result
+    settings = get_settings()
+    key = settings.gemini_api_key.get_secret_value().strip()
+    if not key:
+        probe_result = {"checked": True, "ok": False, "reason": "GEMINI_API_KEY is not set"}
+        return probe_result
+    errors_seen = []
+    order = ["vertex", "developer"] if key.startswith("AQ.") else ["developer", "vertex"]
+    for mode in order:
+        try:
+            client = _make_client(key, mode)
+            r = await asyncio.wait_for(client.aio.models.generate_content(
+                model=settings.gemini_model, contents="Reply with the single word OK."), timeout=timeout)
+            if (r.text or "").strip():
+                _client, _client_key, _mode = client, key, mode
+                probe_result = {"checked": True, "ok": True, "mode": mode, "model": settings.gemini_model}
+                return probe_result
+        except asyncio.TimeoutError:
+            errors_seen.append(f"{mode}: timeout")
+        except Exception as exc:  # noqa: BLE001 — category only, never the body
+            code = getattr(exc, "code", None)
+            errors_seen.append(f"{mode}: {type(exc).__name__}{f' HTTP {code}' if code else ''}")
+    probe_result = {"checked": True, "ok": False, "reason": "Gemini rejected the key or is unreachable (" + "; ".join(errors_seen) + ")"}
+    return probe_result
 
 
 async def generate_structured(system: str, prompt: str, schema: type[BaseModel], *, temperature: float = 0.2) -> tuple[BaseModel, dict]:

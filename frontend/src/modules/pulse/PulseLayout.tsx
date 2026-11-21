@@ -106,14 +106,17 @@ function ServiceChips() {
   return (
     <div className="pp-chips" aria-label="Service status">
       <Pill
-        tone={status.gemini.configured ? "green" : "orange"}
+        tone={status.gemini.verified ? "green" : status.gemini.configured ? "red" : "orange"}
         title={
-          status.gemini.configured
-            ? `Gemini model ${status.gemini.model}`
-            : `${status.gemini.missing_env} not set — Strategy uses the labelled deterministic fallback`
+          status.gemini.verified
+            ? `Gemini ${status.gemini.model} verified (${status.gemini.mode === "vertex" ? "Vertex AI express" : "Gemini API"})`
+            : status.gemini.configured
+              ? status.gemini.problem ?? "Key set but not verified yet"
+              : `${status.gemini.missing_env} not set — Strategy uses the labelled deterministic fallback`
         }
       >
-        <Sparkles size={12} /> Gemini {status.gemini.configured ? status.gemini.model : "not configured"}
+        <Sparkles size={12} /> Gemini{" "}
+        {status.gemini.verified ? status.gemini.model : status.gemini.configured ? "key not working" : "not configured"}
       </Pill>
       <Pill
         tone={status.n8n.reachable ? "green" : "red"}

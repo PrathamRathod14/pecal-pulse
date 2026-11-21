@@ -217,8 +217,10 @@ async def agent_lifespan(settings=None, model=None):
         # OpenRouter remains the primary provider; Gemini serves chat when it is the only key present.
         from langchain_google_genai import ChatGoogleGenerativeAI
         model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        from ..pulse import gemini as pulse_gemini
         model = ChatGoogleGenerativeAI(model=model_name, google_api_key=gemini_key, temperature=0,
-                                       timeout=45, max_retries=1)
+                                       timeout=45, max_retries=1,
+                                       vertexai=pulse_gemini.current_mode() == "vertex")
     model = model if model is not None else ChatOpenRouter(
         api_key=settings.openrouter_api_key.get_secret_value() or "missing",
         base_url="https://openrouter.ai/api/v1", model=settings.llm_model,

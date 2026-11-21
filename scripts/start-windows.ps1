@@ -41,7 +41,7 @@ Push-Location frontend
 npx --yes pnpm@11.21.0 install --frozen-lockfile
 Pop-Location
 Step "Generating the synthetic demo dataset"
-uv run python -m backend.app.pulse.demo_data | Out-Null
+uv run python -m backend.app.pulse.demo_data --with-analytics
 
 Step "Starting n8n"
 $nodeMajor = [int]((node --version).TrimStart('v').Split('.')[0])

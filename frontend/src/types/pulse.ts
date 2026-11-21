@@ -14,7 +14,7 @@ export interface PulseStatus {
   demo_mode: boolean;
   auth_mode: "demo" | "password";
   schema_version: number;
-  gemini: { configured: boolean; model: string; missing_env: string | null };
+  gemini: { configured: boolean; model: string; missing_env: string | null; verified?: boolean | null; mode?: string | null; problem?: string | null };
   n8n: {
     reachable: boolean;
     url: string;

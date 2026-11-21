@@ -14,7 +14,7 @@ from .pulse.service import pulse_lifespan
 
 @asynccontextmanager
 async def lifespan(app):
-    async with agent_lifespan() as chat, pulse_lifespan() as pulse:
+    async with pulse_lifespan() as pulse, agent_lifespan() as chat:
         app.state.chat = chat
         app.state.pulse = pulse
         app.state.voice = VoiceManager()
