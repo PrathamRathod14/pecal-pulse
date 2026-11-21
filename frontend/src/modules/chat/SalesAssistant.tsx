@@ -32,6 +32,7 @@ import { dispatchEvent } from "@/core/events/router";
 import { ChatArtifact } from "./ChatArtifact";
 import { ChatParts } from "./ChatParts";
 import { VoicePanel } from "./VoicePanel";
+import { BrowserVoicePanel } from "./BrowserVoicePanel";
 import { integratedSnapshot } from "@/modules/sales/IntegratedWorkspace";
 import { dashboardSnapshot } from "@/modules/sales/page-context";
 import type { Page, WorkspaceContext, ChatMessage } from "@/types/sales";
@@ -474,7 +475,11 @@ export function SalesAssistant() {
             <code>.env</code> and restart the backend. Agent Ops works without it.
           </p>
         )}
-        <VoicePanel key={`${voiceResetRevision}-${language}`} />
+        {voiceConfigured === false ? (
+          <BrowserVoicePanel key={`browser-${voiceResetRevision}`} />
+        ) : (
+          <VoicePanel key={`${voiceResetRevision}-${language}`} />
+        )}
         <ThreadPrimitive.Viewport className="chat-viewport">
           <ThreadPrimitive.Messages>
             {({ message }) =>
