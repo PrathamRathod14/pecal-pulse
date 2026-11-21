@@ -327,13 +327,18 @@ async def pulse_lifespan():
     with connect() as conn:  # runs that were mid-flight when the process died
         conn.execute("UPDATE agent_runs SET status='failed', error='Interrupted by API restart', updated_at=? WHERE status='running'",
                      (audit.now_iso(),))
+    probe_task = None
     if settings.gemini_configured:
         from . import gemini
-        try:
-            result = await gemini.probe()
-            log.warning("Gemini probe: %s", {k: v for k, v in result.items() if k != "reason"} if result.get("ok") else result.get("reason"))
-        except Exception:  # noqa: BLE001
-            log.warning("Gemini probe failed")
+
+        async def _probe():
+            try:
+                result = await gemini.probe()
+                log.warning("Gemini probe: %s", {k: v for k, v in result.items() if k != "reason"} if result.get("ok") else result.get("reason"))
+            except Exception:  # noqa: BLE001
+                log.warning("Gemini probe failed")
+
+        probe_task = asyncio.create_task(_probe())  # startup never waits on Google
     async with AsyncSqliteSaver.from_conn_string(str(settings.checkpoint_file)) as saver:
         _runtime = Runtime(build_graph().compile(checkpointer=saver), saver)
 
@@ -350,6 +355,8 @@ async def pulse_lifespan():
             yield _runtime
         finally:
             task.cancel()
+            if probe_task:
+                probe_task.cancel()
             for t in list(_runtime.tasks.values()):
                 t.cancel()
             _runtime = None
